@@ -16,34 +16,31 @@ def index():
 # Form to submit operator and powerplant details
 @app.server.route("/admin")
 def admin():
-     # check if maintenance file uploaded
+    # check if maintenance file has been uploaded
     if os.path.exists("maintenance.csv")==False:
         return render_template("preview.html")
     # go to admin page
     return render_template("admin.html")
 
+# Endpoint to Dashboard
 @app.server.route("/dashapp1/")
 def dashapp1():
-    # check if maintenance file uploaded
+    # check if maintenance file has been uploaded
     if os.path.exists("maintenance.csv")==False:
         return render_template("preview.html")
     else:
         return redirect("/dashapp/")
    
-    
-@app.server.route("/submit_data",methods=['POST'])
-def submit_data():
-    # go back to home page
-    return redirect("/")
-    
+ 
+#Endpoint resets application     
 @app.server.route("/reset")
 def reset():
-    print("call back used.")
-
+    os.remove("maintenance.csv")
+    os.remove("summary.csv")
     # go back to home page
     return redirect("/")
     
-    
+ #Endpoint to upload maintenace file        
 @app.server.route("/store_file",methods=['POST'])
 def store_file():
     file=request.files["maintenance"]
@@ -70,7 +67,6 @@ def store_file():
     power['DateTime']=power.index
     power['DateTime'] = power['DateTime'].apply(lambda x: pd.to_datetime(str(x), format='%Y%m%d'))
     power.set_index('DateTime', inplace = True)
-    print(power.index)
     power_csv=power.to_csv("summary.csv")
     # go back to home page
     return redirect("/")

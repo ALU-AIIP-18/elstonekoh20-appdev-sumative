@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 import os
+from api_calls import wind_input,solar_input,read_file,sms_client,predict_power,check_maintenance,combined_power
 
 def get_dash(server):
     external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -134,10 +135,21 @@ def get_dash(server):
 def get_data():
     '''Read Data to be Displayed on DashBoard'''
     if os.path.exists("summary.csv")==False:
-        dummy=[1,1,1,1,1]
-        dt={'DateTime':dummy,'wind_power':dummy,'solar_power':dummy,'output_power':dummy}
-        df=pd.DataFrame(dt,columns=['DateTime','wind_power','solar_power','output_power'])
-        df.to_csv("summary.csv")
+        # Initialise summary file
+        # Obtain Meterological Data
+        wind_data=wind_input(0,0)
+        solar_data=solar_input(0,0)
+        
+        # Power Prediction for ML model
+        wind_power=predict_power('wind',wind_data)
+        solar_power=predict_power('solar',solar_data)
+        # Combine wind and solar power
+        power= combined_power(solar_power,wind_power)
+        power['DateTime']=power.index
+        power['DateTime'] = power['DateTime'].apply(lambda x: pd.to_datetime(str(x), format='%Y%m%d'))
+        power.set_index('DateTime', inplace = True)
+        power_csv=power.to_csv("summary.csv")
+        
     power_csv=pd.read_csv("summary.csv")
     return power_csv
 
