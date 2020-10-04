@@ -1,14 +1,11 @@
 import dash
 import dash_core_components as dcc
-import dash_html_components as html
-import os
-import plotly.graph_objects as go
 from dash.dependencies import Input, Output
+import dash_html_components as html
+import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
-from api_calls import wind_input,solar_input,read_file,predict_power,check_maintenance,combined_power,sms_client
-import pandas as pd
-import pickle
+import os
 
 def get_dash(server):
     external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -17,12 +14,13 @@ def get_dash(server):
                     routes_pathname_prefix='/dashapp/',
                     external_stylesheets=external_stylesheets
                     )
-
+    # Function to get data
     df = get_data()
-    
-    df_index=pd.to_datetime(df.index)
+    df_index=df.DateTime
+    # Function to get styles
     styles = get_styles()
-
+    
+    # Plot line graph
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df_index, y=df["solar_power"],
                     mode='lines+markers',
@@ -33,7 +31,7 @@ def get_dash(server):
     fig.add_trace(go.Scatter(x=df_index, y=df["output_power"],
                     mode='lines+markers', 
                     name='Total Power'))
-    fig.update_layout(title={'text': "7-DAYS POWER FORECAST",
+    fig.update_layout(title={'text': "8-DAYS POWER FORECAST",
                                    'y':0.9,
                                    'x':0.5,
                                    'xanchor': 'center',
@@ -50,11 +48,10 @@ def get_dash(server):
                                    xanchor="right",
                                    x=1)
                        )
-    
     app.layout = html.Div([
         # html.H6("Change the value in the text box to see callbacks in action!"),
         html.A("HOME", href="/", style=styles["button_styles"]),
-        html.A("SEND SMS", href="/", style=styles["button_styles"]),
+        html.A("SEND SMS", href="/sms", style=styles["button_styles"]),
         html.Div("AppDev Power Plant Dashboard", id='my-output',
                  style=styles["text_styles"]),
         html.Div(children=[
@@ -63,9 +60,9 @@ def get_dash(server):
                 id='Today',
                 figure=go.Figure(go.Indicator(
                                                 mode = "gauge+number",
-                                                value = df.loc[df.index[0]]['output_power'],
+                                                value = (df.loc[df.index[1]]['output_power']).round(decimals=2),
                                                 domain = {'x': [0, 1], 'y': [0, 1]},
-                                                title = {'text': str(df_index[0])[0:10],'font': {'size': 24}},
+                                                title = {'text': str(df_index[1])[0:10],'font': {'size': 24}},
                                                 gauge = {'axis': {'range': [None, 60]},
                                                          'steps' : [
                                                         {'range': [0, 4], 'color': "red"},
@@ -79,10 +76,10 @@ def get_dash(server):
                 id='Tommorrow',
                 figure=go.Figure(go.Indicator(
                                                 mode = "gauge+number",
-                                                value = df.loc[df.index[1]]['output_power'],
+                                                value = float("{:.2f}".format(df.loc[df.index[2]]['output_power'])),
                                                 domain = {'x': [0, 1], 'y': [0, 1]},
-                                                title = {'text': str(df_index[1])[0:10],'font': {'size': 24}},
-                                                                                                gauge = {'axis': {'range': [None, 60]},
+                                                title = {'text': str(df_index[2])[0:10],'font': {'size': 24}},
+                                                gauge = {'axis': {'range': [None, 60]},
                                                          'steps' : [
                                                         {'range': [0, 4], 'color': "red"},
                                                         {'range': [4, 60], 'color': "gray"}],
@@ -95,9 +92,9 @@ def get_dash(server):
                 id='nextommorrow',
                 figure=go.Figure(go.Indicator(
                                                 mode = "gauge+number",
-                                                value = df.loc[df.index[2]]['output_power'],
+                                                value = float("{:.2f}".format(df.loc[df.index[3]]['output_power'])),
                                                 domain = {'x': [0, 1], 'y': [0, 1]},
-                                                title = {'text':str(df_index[2])[0:10],'font': {'size': 24}},
+                                                title = {'text':str(df_index[3])[0:10],'font': {'size': 24}},
                                                 gauge = {'axis': {'range': [None, 60]},
                                                          'steps' : [
                                                         {'range': [0, 4], 'color': "red"},
@@ -111,9 +108,9 @@ def get_dash(server):
                 id='the day after',
                 figure=go.Figure(go.Indicator(
                                                 mode = "gauge+number",
-                                                value = df.loc[df.index[3]]['output_power'],
+                                                value = float(format(df.loc[df.index[4]]['output_power'],'.2f')),
                                                 domain = {'x': [0, 1], 'y': [0, 1]},
-                                                title = {'text':str(df_index[3])[0:10],'font': {'size': 24}},
+                                                title = {'text':str(df_index[4])[0:10],'font': {'size': 24}},
                                                 gauge = {'axis': {'range': [None, 60]},
                                                          'steps' : [
                                                         {'range': [0, 4], 'color': "red"},
@@ -135,33 +132,14 @@ def get_dash(server):
 
 
 def get_data():
-        
-        if os.path.exists("maintenance_wind.csv")==False:
-            df=pd.DataFrame(columns=['Date of Month;','Capacity Available as %'])
-            df.to_csv("maintenance_wind.csv")
-            df.to_csv("maintenance_solar.csv")
-        else:
-            pass
-        wind_data=wind_input(0,0)
-        wind_schedule=read_file("maintenance_wind.csv",wind_data.index[0]) 
-        wind_power=predict_power('wind',wind_data)
-        final_wind=check_maintenance(wind_schedule,wind_power)
-
-
-
-        solar_data=solar_input(0,0)
-        solar_schedule=read_file("maintenance_solar.csv",solar_data.index[0])
-        solar_power=predict_power('solar',solar_data)
-        final_solar=check_maintenance(solar_schedule,solar_power)
-        power= combined_power(final_solar,final_wind)
-        sms=power[power['output_power']<=2]
-        sms_date=list(sms.index.values)
-        sms_power=list(sms.output_power.values)
-        if len(sms_power) == 0:
-            pass
-        else:
-            sms_client(sms_power,sms_date)
-        return power
+    '''Read Data to be Displayed on DashBoard'''
+    if os.path.exists("summary.csv")==False:
+        dummy=[1,1,1,1,1]
+        dt={'DateTime':dummy,'wind_power':dummy,'solar_power':dummy,'output_power':dummy}
+        df=pd.DataFrame(dt,columns=['DateTime','wind_power','solar_power','output_power'])
+        df.to_csv("summary.csv")
+    power_csv=pd.read_csv("summary.csv")
+    return power_csv
 
 
 def get_styles():

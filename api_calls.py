@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from twilio.rest import Client
 import requests
 import pickle
@@ -26,10 +27,10 @@ def wind_input(wind_lat,wind_lon):
         wind_speed.append(float(wind_value[str(speed)]))
         wind_direction.append(float(data["dataseries"][i][ "wind10m"]['direction']))
     wind_data = {'dates':dates,
-                 'wind_speed': [sum(wind_speed[0:8])/4,sum(wind_speed[8:16])/4,sum(wind_speed[16:24])/4,sum(wind_speed[24:32])/4,
-                                sum(wind_speed[32:40])/4,sum(wind_speed[40:48])/4,sum(wind_speed[48:56])/4,sum(wind_speed[56:64])/4],
-                 'wind_direction':[sum(wind_direction[0:8])/4,sum(wind_direction[8:16])/4,sum(wind_direction[16:24])/4,sum(wind_direction[24:32])/4,
-                                   sum(wind_direction[32:40])/4,sum(wind_direction[40:48])/4,sum(wind_direction[48:56])/4,sum(wind_direction[56:64])/4]
+                 'wind_speed': [max(wind_speed[0:8]),max(wind_speed[8:16]),max(wind_speed[16:24]),max(wind_speed[24:32]),
+                                max(wind_speed[32:40]),max(wind_speed[40:48]),max(wind_speed[48:56]),max(wind_speed[56:64])],
+                 'wind_direction':[np.median(wind_direction[0:8]),np.median(wind_direction[8:16]),np.median(wind_direction[16:24]),np.median(wind_direction[24:32]),
+                                   np.median(wind_direction[32:40]),np.median(wind_direction[40:48]),np.median(wind_direction[48:56]),np.median(wind_direction[56:64])]
                  }
     wind_data=pd.DataFrame.from_dict(wind_data)
     wind_data.set_index("dates", inplace = True)
@@ -55,10 +56,14 @@ def solar_input(solar_lat,solar_lon):
         #dates.append(int(data["init"][0:8])+j)
         dates=get_dates(data["init"])
         
+    # Converts class of prec_amount in 7timer to values sutiable for model. Averge value of class is used
+    precip_value={"0":0,"1":0.125,'2':0.625,'3':2.5,'4':9.0,'5':13.0,'6':23.0,'7':40.0,'8':62.5,'9':75}
     for i in range(data_size):
         solar_temp.append((float(data["dataseries"][i][ "temp2m"])* 9/5) + 32 )
         cover.append(float(data["dataseries"][i][ "cloudcover"]))
-        precip.append(float(data["dataseries"][i][ "prec_amount"]))
+        precip_class=data["dataseries"][i][ "prec_amount"]
+        precip.append(float(precip_value[str(precip_class)]))
+        #precip.append(float(data["dataseries"][i][ "prec_amount"]))
     solar_data = {'dates':dates,
                  'temp_hi': [max(solar_temp[0:8]),max(solar_temp[8:16]),max(solar_temp[16:24]),max(solar_temp[24:32]),
                              max(solar_temp[32:40]),max(solar_temp[40:48]),max(solar_temp[48:56]),max(solar_temp[56:64])], 
@@ -71,6 +76,7 @@ def solar_input(solar_lat,solar_lon):
                  }
     solar_data=pd.DataFrame.from_dict(solar_data)
     solar_data.set_index("dates", inplace = True)
+    
     return solar_data
 
 # Reads csvfile
@@ -134,22 +140,22 @@ def combined_power(final_solar,final_wind):
     return pd.DataFrame.from_dict(output_power, orient='index',columns=['solar_power', 'wind_power', 'output_power'])
 
 # Module to send sms with Twilio 
-def sms_client(sms_power,sms_date):
+def sms_client(sms_power,sms_date,status,phone):
     account = "ACd5f2964264997275a58388ea0cacb8d0"
-    token = "45477273b7f46189e888cf8cc88e5c36"
+    token = "8b14fd18907f16ebacec9e81b473c84f"
     client = Client(account, token)
-    power=""
-    date=""
+    sms=""
     for i in range(len(sms_power)):
-        if power=="":
-            power=power+str(sms_power[i])
-            date=date+str(sms_date[i]) 
+        if sms=="":
+            sms=str(sms_date[i]) +":- " +str(sms_power[i])+"MW"
         else:
-            power=power+"\n"+str(sms_power[i])
-            date=date+"\n"+str(sms_date[i])
-            
-    message = client.messages.create(to="+2347030361587", from_="+12025590186",
-                                 body="Hello,\n" + "Predicted power for these/this date(s)is lesser than agreed SLA.\n" + date + "\nThank You")
+            sms=sms+"\n"+ str(sms_date[i]) +":- " +str(sms_power[i])+"MW"
+    if status==0:        
+        message = client.messages.create(to=phone, from_="+12025590186",
+                                 body="Hello,\n" + "Predicted power for these/this date(s)is lesser than agreed SLA.\n" + sms + "\nThank You")
+    else:
+        message = client.messages.create(to=str(phone), from_="+12025590186",
+                                 body="Hello,\n" + "Predicted power for today and the next seven days is shown below.\n" + sms + "\nThank You")
     return
 
 # Manipulate Dates
